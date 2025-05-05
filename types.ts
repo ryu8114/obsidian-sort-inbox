@@ -56,6 +56,8 @@ export interface ClassificationOptions {
     logResults?: boolean;
     // 分類できなかったファイルをスキップするか
     skipUnclassified?: boolean;
+    // 分類対象のフォルダリスト
+    folderList?: string[];
 }
 
 // 分類処理の結果サマリー

@@ -24,23 +24,38 @@ export interface ClassificationBatch {
 }
 
 export async function classifyFile(file: TFile, settings: SortInboxSettings, vault: Vault): Promise<ClassificationResult> {
-    // ここにGemini APIを使った分類処理を実装します
-    // 現時点ではスケルトンのみ
-
     try {
-        // タイトルとコンテンツを取得 (実際の実装ではファイルを読み込む)
+        // タイトルを取得
         const title = file.basename;
-        const content = "サンプルコンテンツ"; // 実際にはファイルの内容を読み込む
-
+        
+        // ファイルの内容を読み込む
+        const content = await vault.cachedRead(file);
+        
+        // コンテンツの長さを制限（APIのトークン制限に対応）
+        const maxLength = settings.classificationOptions.maxContentLength || 1000;
+        const truncatedContent = content.length > maxLength 
+            ? content.substring(0, maxLength) + "..." 
+            : content;
+        
         // フォルダリストを取得
         const folderList = settings.targetFolders;
-
-        // APIリクエストを構築してGeminiに送信
-        // 実際の実装ではAPIキーを使ってGeminiにリクエストを送信
         
-        // 仮の戻り値 (実際の実装では、Geminiの回答を解析する)
-        const targetFolder = null; // 仮実装：分類なし
-
+        if (!settings.geminiApiKey) {
+            throw new Error('Gemini APIキーが設定されていません');
+        }
+        
+        // プロンプトを構築
+        const prompt = buildPrompt(title, truncatedContent, folderList);
+        
+        // APIリクエストを送信
+        const response = await callGeminiAPI(settings.geminiApiKey, prompt, {
+            timeoutMs: settings.classificationOptions.timeoutMs || 10000,
+            folderList: folderList
+        });
+        
+        // 応答から分類先フォルダを抽出
+        const targetFolder = response;
+        
         return {
             file: file,
             targetFolder: targetFolder,
@@ -96,19 +111,22 @@ export function buildGeminiRequest(prompt: string, options?: Partial<Classificat
     };
 }
 
-// Gemini APIにリクエストを送信する関数 (実装予定)
-export async function callGeminiAPI(apiKey: string, prompt: string, options?: Partial<ClassificationOptions>): Promise<string> {
-    // ここに実際のGemini APIへのリクエスト処理を実装します
-    // 現時点ではモック実装
+// Gemini APIにリクエストを送信する関数
+export async function callGeminiAPI(apiKey: string, prompt: string, options?: Partial<ClassificationOptions> & { folderList?: string[] }): Promise<string | null> {
+    if (!apiKey) {
+        throw new Error('APIキーが指定されていません');
+    }
     
-    // タイムアウト設定
-    const timeoutMs = options?.timeoutMs || 10000;
+    // APIリクエストを構築
+    const request = buildGeminiRequest(prompt, options);
     
     try {
-        // 実際の実装ではfetchなどを使ってAPIにリクエストを送信
+        // Gemini APIにリクエストを送信
+        const response = await sendGeminiAPIRequest(apiKey, request, options);
         
-        // 仮の応答を返す
-        return "分類しない";
+        // 応答を解析
+        const targetFolder = parseGeminiResponse(response, options?.folderList || []);
+        return targetFolder;
     } catch (error) {
         console.error('Gemini API呼び出し中にエラーが発生:', error);
         throw new Error('API呼び出しに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
@@ -138,14 +156,16 @@ export async function testGeminiAPI(apiKey: string): Promise<boolean> {
     };
     
     try {
-        // 実際にはここでGemini APIにリクエストを送信
-        // 現時点ではモック実装
+        // 実際にGemini APIにリクエストを送信
+        const response = await sendGeminiAPIRequest(apiKey, request);
         
-        // APIキーが有効かどうかをテスト
-        // 本来は実際にAPIリクエストを送信して確認
+        // 応答を確認
+        if (!response.candidates || response.candidates.length === 0) {
+            return false;
+        }
         
-        // 仮の応答（実際の実装では真のAPI応答に基づいて判断）
-        const isValid = apiKey.length > 10; 
+        const text = response.candidates[0].content.parts[0].text.trim().toLowerCase();
+        const isValid = text.includes('テスト成功') || text.includes('test success');
         
         return isValid;
     } catch (error) {
@@ -158,19 +178,21 @@ export async function testGeminiAPI(apiKey: string): Promise<boolean> {
 export function parseGeminiResponse(response: GeminiResponse, targetFolders: string[]): string | null {
     try {
         if (!response.candidates || response.candidates.length === 0) {
+            console.log('Gemini API応答に候補がありません');
             return null;
         }
 
         const text = response.candidates[0].content.parts[0].text.trim();
+        console.log('Gemini APIからの応答:', text);
         
         // 「分類しない」の場合はnullを返す
-        if (text === '分類しない') {
+        if (text === '分類しない' || text.includes('分類しない')) {
             return null;
         }
         
         // テキストがフォルダ名リストのいずれかと一致するかチェック
         for (const folder of targetFolders) {
-            if (text === folder || text.endsWith(folder)) {
+            if (text === folder || text.endsWith(folder) || text.includes(folder)) {
                 return folder;
             }
         }
@@ -185,7 +207,8 @@ export function parseGeminiResponse(response: GeminiResponse, targetFolders: str
 
 // 実際のAPIリクエストを送信する関数
 export async function sendGeminiAPIRequest(apiKey: string, requestBody: GeminiRequest, options?: Partial<ClassificationOptions>): Promise<GeminiResponse> {
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent';
+    // Gemini 2.0 Flash APIのエンドポイント
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
     const timeoutMs = options?.timeoutMs || 10000;
     
     // URLにAPIキーをクエリパラメータとして追加
