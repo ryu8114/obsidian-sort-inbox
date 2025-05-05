@@ -1,0 +1,22 @@
+# Node.js dependencies
+node_modules/
+
+# Build output
+main.js
+*.js.map
+data.json
+
+# Obsidian files
+.obsidian/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# TypeScript cache
+*.tsbuildinfo 
