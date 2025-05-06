@@ -34,7 +34,9 @@ export const DEFAULT_SETTINGS: SortInboxSettings = {
 		timeoutMs: 10000, // 10秒タイムアウト
 		logResults: true,
 		skipUnclassified: true,
-		highAccuracyMode: false // デフォルトでは効率優先モード
+		highAccuracyMode: false, // デフォルトでは効率優先モード
+		apiKeyStatus: 'unverified', // 初期状態は未検証
+		lastApiKeyVerification: undefined // 未検証
 	}
 }
 
@@ -87,6 +89,24 @@ export class SortInboxSettingTab extends PluginSettingTab {
 			text: '未検証'
 		});
 
+		// 保存されているAPIキー検証ステータスがあれば表示
+		const savedStatus = this.plugin.settings.classificationOptions.apiKeyStatus;
+		if (savedStatus) {
+			if (savedStatus === 'valid') {
+				apiStatusEl.textContent = '有効 ✓';
+				apiStatusEl.className = 'api-status api-status-valid';
+			} else if (savedStatus === 'invalid') {
+				apiStatusEl.textContent = '無効 ✗';
+				apiStatusEl.className = 'api-status api-status-error';
+			} else if (savedStatus === 'error') {
+				apiStatusEl.textContent = 'エラー ✗';
+				apiStatusEl.className = 'api-status api-status-error';
+			} else {
+				apiStatusEl.textContent = '未検証';
+				apiStatusEl.className = 'api-status';
+			}
+		}
+
 		// 検証ボタン
 		apiTestSetting.addButton(button => button
 			.setButtonText('テスト実行')
@@ -102,6 +122,11 @@ export class SortInboxSettingTab extends PluginSettingTab {
 					new Notice('APIキーが入力されていません');
 					apiStatusEl.textContent = '未入力';
 					apiStatusEl.className = 'api-status api-status-error';
+					
+					// 検証ステータスを保存
+					this.plugin.settings.classificationOptions.apiKeyStatus = 'invalid';
+					this.plugin.settings.classificationOptions.lastApiKeyVerification = Date.now();
+					await this.plugin.saveSettings();
 					return;
 				}
 				
@@ -117,18 +142,31 @@ export class SortInboxSettingTab extends PluginSettingTab {
 						apiStatusEl.textContent = '有効 ✓';
 						apiStatusEl.className = 'api-status api-status-valid';
 						new Notice('APIキーは有効です！');
+						
+						// 検証ステータスを保存
+						this.plugin.settings.classificationOptions.apiKeyStatus = 'valid';
 					} else {
 						apiStatusEl.textContent = '無効 ✗';
 						apiStatusEl.className = 'api-status api-status-error';
 						new Notice('APIキーが無効です。正しいキーを入力してください。');
+						
+						// 検証ステータスを保存
+						this.plugin.settings.classificationOptions.apiKeyStatus = 'invalid';
 					}
 				} catch (error) {
 					console.error('API検証エラー:', error);
 					apiStatusEl.textContent = 'エラー ✗';
 					apiStatusEl.className = 'api-status api-status-error';
 					new Notice(`APIテストエラー: ${error instanceof Error ? error.message : String(error)}`);
+					
+					// 検証ステータスを保存
+					this.plugin.settings.classificationOptions.apiKeyStatus = 'error';
 				} finally {
 					this.apiTestInProgress = false;
+					
+					// 検証日時を保存
+					this.plugin.settings.classificationOptions.lastApiKeyVerification = Date.now();
+					await this.plugin.saveSettings();
 				}
 			}));
 
@@ -526,7 +564,7 @@ export class SortInboxSettingTab extends PluginSettingTab {
 			
 			.api-status-error {
 				background-color: var(--background-modifier-error);
-				color: var(--text-error);
+				color: white;
 			}
 			
 			.api-status-pending {

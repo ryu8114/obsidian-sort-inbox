@@ -48,7 +48,7 @@ export interface ClassificationHistoryItem {
 
 // 分類処理のオプション
 export interface ClassificationOptions {
-    // コンテンツの最大長（トークン数制限のため）
+    // コンテンツの最大長（トークン制限のため）
     maxContentLength?: number;
     // APIタイムアウト（ミリ秒）
     timeoutMs?: number;
@@ -60,6 +60,10 @@ export interface ClassificationOptions {
     folderList?: string[];
     // 高精度モード（より正確な分類を行うが、処理速度が遅くなる）
     highAccuracyMode?: boolean;
+    // APIキーの検証ステータス
+    apiKeyStatus?: 'unverified' | 'valid' | 'invalid' | 'error';
+    // 最後にAPIキーを検証した日時
+    lastApiKeyVerification?: number;
 }
 
 // 分類処理の結果サマリー
