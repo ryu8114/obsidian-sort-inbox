@@ -33,7 +33,8 @@ export const DEFAULT_SETTINGS: SortInboxSettings = {
 		maxContentLength: 1000, // 最初の1000文字だけ使用
 		timeoutMs: 10000, // 10秒タイムアウト
 		logResults: true,
-		skipUnclassified: true
+		skipUnclassified: true,
+		highAccuracyMode: false // デフォルトでは効率優先モード
 	}
 }
 
@@ -327,7 +328,7 @@ export class SortInboxSettingTab extends PluginSettingTab {
 		
 		const folderListEl = containerEl.createEl('div', { cls: 'folders-list' });
 		
-		this.plugin.settings.targetFolders.forEach((folder, index) => {
+		this.plugin.settings.targetFolders.forEach((folder: string, index: number) => {
 			const folderItemEl = folderListEl.createEl('div', { cls: 'folder-item' });
 			
 			// フォルダアイコンを表示

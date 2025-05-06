@@ -208,7 +208,7 @@ export function parseGeminiResponse(response: GeminiResponse, targetFolders: str
 // 実際のAPIリクエストを送信する関数
 export async function sendGeminiAPIRequest(apiKey: string, requestBody: GeminiRequest, options?: Partial<ClassificationOptions>): Promise<GeminiResponse> {
     // Gemini 2.0 Flash APIのエンドポイント
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
     const timeoutMs = options?.timeoutMs || 10000;
     
     // URLにAPIキーをクエリパラメータとして追加
@@ -246,4 +246,192 @@ export async function sendGeminiAPIRequest(apiKey: string, requestBody: GeminiRe
     } finally {
         clearTimeout(timeoutId);
     }
+}
+
+// 複数のファイルをバッチで分類する関数
+export async function classifyFileBatch(
+    tasks: ClassificationTask[], 
+    vault: Vault, 
+    progressCallback?: (current: number, total: number, message: string) => void
+): Promise<ClassificationResult[]> {
+    const results: ClassificationResult[] = [];
+    const batchSize = 5; // 一度に処理するファイル数（APIレート制限対策）
+    
+    try {
+        // タスクをバッチに分割
+        for (let i = 0; i < tasks.length; i += batchSize) {
+            const batchTasks = tasks.slice(i, i + batchSize);
+            const batchNumber = Math.floor(i / batchSize) + 1;
+            const totalBatches = Math.ceil(tasks.length / batchSize);
+            
+            // 進捗状況をコンソールとUI両方に表示
+            const progressMessage = `バッチ ${batchNumber}/${totalBatches} 処理中`;
+            console.log(`${progressMessage}: ${i+1}〜${Math.min(i+batchSize, tasks.length)}/${tasks.length}ファイル...`);
+            
+            // 進捗コールバックが提供されている場合は呼び出し
+            if (progressCallback) {
+                progressCallback(i, tasks.length, progressMessage);
+            }
+            
+            // 各バッチを順番に処理
+            const batchPromises = batchTasks.map(task => 
+                classifyFile(task.file, task.settings, vault));
+            
+            // このバッチの処理を完了
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
+            
+            // APIレート制限対策のため少し待機（1分間に15リクエストの制限対応）
+            if (i + batchSize < tasks.length) {
+                const waitMessage = 'APIレート制限対策のため待機中...';
+                console.log(waitMessage);
+                
+                if (progressCallback) {
+                    progressCallback(i + batchSize, tasks.length, waitMessage);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
+        return results;
+    } catch (error) {
+        console.error('バッチ分類処理中にエラーが発生:', error);
+        throw error;
+    }
+}
+
+// 複数ファイルを一度のリクエストでまとめて分類する機能
+export async function batchClassifyFiles(
+    files: TFile[], 
+    settings: SortInboxSettings, 
+    vault: Vault
+): Promise<Map<string, string | null>> {
+    // 結果を格納するマップ（ファイルパス -> 分類先フォルダ）
+    const results = new Map<string, string | null>();
+    
+    try {
+        if (!settings.geminiApiKey) {
+            throw new Error('Gemini APIキーが設定されていません');
+        }
+        
+        // ファイルIDとTFileオブジェクトのマッピングを作成
+        const fileMap = new Map<string, TFile>();
+        
+        // 各ファイルの内容を取得
+        const filesData = await Promise.all(
+            files.map(async (file, index) => {
+                const content = await vault.cachedRead(file);
+                // トークン数を削減するため、各ファイル内容を短く切り詰める
+                const maxLength = 300; // 各ファイル300文字までに制限
+                const truncatedContent = content.length > maxLength 
+                    ? content.substring(0, maxLength) + "..." 
+                    : content;
+                
+                // ファイルIDは単純なインデックス（Geminiが返すのはこのIDのみ）
+                const fileId = `file_${index + 1}`;
+                
+                // マッピングを保存
+                fileMap.set(fileId, file);
+                
+                return {
+                    id: fileId,
+                    title: file.basename,
+                    content: truncatedContent
+                };
+            })
+        );
+        
+        // 分類対象フォルダのリスト
+        const folderList = settings.targetFolders;
+        
+        // バッチ用プロンプトを構築
+        const prompt = `あなはフォルダ分類アシスタントです。以下の複数のファイルを、最も適したフォルダに分類してください。
+
+■ 分類先フォルダ一覧:
+${folderList.map(folder => `- ${folder}`).join('\n')}
+※どのフォルダにも当てはまらない場合は「分類しない」と回答してください。
+
+■ 分類対象のファイル:
+${filesData.map((file, index) => `
+=== ファイル${index + 1} (ID:${file.id}): ${file.title} ===
+${file.content}
+`).join('\n')}
+
+■ 出力形式:
+各ファイルの分類結果を以下の形式でJSON配列として返してください:
+[
+    {"id": "file_1", "folder": "分類先フォルダ名"},
+    {"id": "file_2", "folder": "分類先フォルダ名"},
+    ...
+]
+※「分類しない」場合は、"folder"の値を"分類しない"としてください。
+`;
+
+        // APIリクエストを構築
+        const request: GeminiRequest = {
+            contents: [{
+                parts: [{
+                    text: prompt
+                }]
+            }],
+            generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 1024, // 結果が大きくなる可能性があるため増加
+            }
+        };
+        
+        // APIリクエストを送信
+        const response = await sendGeminiAPIRequest(settings.geminiApiKey, request);
+        
+        if (!response.candidates || response.candidates.length === 0) {
+            console.error('バッチ分類: API応答に候補がありません');
+            return results;
+        }
+        
+        // APIレスポンスを取得
+        const responseText = response.candidates[0].content.parts[0].text.trim();
+        console.log('バッチ分類結果:', responseText);
+        
+        // JSONレスポンスを抽出（テキスト内からJSONを検索）
+        // sフラグを使わずにドット(.)が改行にもマッチするようにする
+        const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        if (!jsonMatch) {
+            console.error('バッチ分類: JSON形式の応答を抽出できませんでした');
+            return results;
+        }
+        
+        try {
+            // JSON文字列をパース
+            const jsonResponse = JSON.parse(jsonMatch[0]);
+            
+            // 各ファイルの分類結果を結果マップに追加
+            for (const item of jsonResponse) {
+                const fileId = item.id;
+                const folder = item.folder === '分類しない' ? null : item.folder;
+                
+                // マッピングからファイルを取得
+                const file = fileMap.get(fileId);
+                
+                if (file) {
+                    // 指定されたフォルダが有効かチェック
+                    if (folder === null || settings.targetFolders.includes(folder)) {
+                        results.set(file.path, folder);
+                    } else {
+                        // 指定されたフォルダが無効な場合、分類しない
+                        results.set(file.path, null);
+                    }
+                } else {
+                    console.warn(`ファイルID "${fileId}" に対応するファイルが見つかりません`);
+                }
+            }
+        } catch (error) {
+            console.error('バッチ分類: JSON解析エラー', error);
+        }
+        
+    } catch (error) {
+        console.error('バッチ分類処理中にエラーが発生:', error);
+    }
+    
+    return results;
 } 

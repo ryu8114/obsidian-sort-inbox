@@ -58,6 +58,8 @@ export interface ClassificationOptions {
     skipUnclassified?: boolean;
     // 分類対象のフォルダリスト
     folderList?: string[];
+    // 高精度モード（より正確な分類を行うが、処理速度が遅くなる）
+    highAccuracyMode?: boolean;
 }
 
 // 分類処理の結果サマリー

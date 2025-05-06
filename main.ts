@@ -1,7 +1,7 @@
 import { Plugin, TFile, Notice, normalizePath } from 'obsidian';
 import { SortInboxSettings, DEFAULT_SETTINGS } from './settings';
 import { SortInboxSettingTab } from './settings';
-import { classifyFile, ClassificationResult, ClassificationBatch } from './classify';
+import { classifyFile, ClassificationResult, ClassificationBatch, classifyFileBatch, batchClassifyFiles } from './classify';
 import { ClassificationStatus, ClassificationSummary } from './types';
 
 export default class SortInboxPlugin extends Plugin {
@@ -251,34 +251,92 @@ export default class SortInboxPlugin extends Plugin {
 				inProgress: true,
 				startTime: Date.now()
 			};
-
-			// 各ファイルを分類
-			for (const file of files) {
+			
+			// 効率的なバッチ処理を使用（1回のAPIリクエストで複数ファイルを処理）
+			// ファイル数が少ない場合または設定で高精度モードが有効な場合は個別処理
+			const useJsonBatch = files.length >= 3 && !this.settings.classificationOptions.highAccuracyMode;
+			
+			if (useJsonBatch) {
 				try {
-					const result = await classifyFile(file, this.settings, this.app.vault);
+					// 処理開始を通知
+					this.showProgress(0, files.length, '一括分類処理を開始...');
 					
-					if (result.success && result.targetFolder) {
-						// 分類先が見つかった場合は移動
-						await this.moveFileToFolder(file, result.targetFolder);
-						
-						// サマリーの更新
-						this.currentBatch.summary.classifiedFiles++;
-						
-						// フォルダごとのカウントを更新
-						if (!this.currentBatch.summary.folderCounts[result.targetFolder]) {
-							this.currentBatch.summary.folderCounts[result.targetFolder] = 0;
+					// バッチ処理を使用（1回のAPIリクエストで複数ファイルを処理）
+					const batchResults = await batchClassifyFiles(files, this.settings, this.app.vault);
+					
+					// 進捗表示を更新
+					this.showProgress(files.length / 2, files.length, '分類結果に基づいてファイルを移動中...');
+					
+					// 各ファイルを分類結果に基づいて移動
+					for (const file of files) {
+						try {
+							const targetFolder = batchResults.get(file.path);
+							
+							if (targetFolder) {
+								// 分類先が見つかった場合は移動
+								await this.moveFileToFolder(file, targetFolder);
+								
+								// サマリーの更新
+								this.currentBatch.summary.classifiedFiles++;
+								
+								// フォルダごとのカウントを更新
+								if (!this.currentBatch.summary.folderCounts[targetFolder]) {
+									this.currentBatch.summary.folderCounts[targetFolder] = 0;
+								}
+								this.currentBatch.summary.folderCounts[targetFolder]++;
+							} else {
+								// 分類できなかった（スキップ）
+								this.currentBatch.summary.skippedFiles++;
+							}
+						} catch (error) {
+							console.error(`ファイル「${file.basename}」の処理中にエラーが発生:`, error);
+							this.currentBatch.summary.failedFiles++;
 						}
-						this.currentBatch.summary.folderCounts[result.targetFolder]++;
-					} else if (result.success) {
-						// 分類できなかった（スキップ）
-						this.currentBatch.summary.skippedFiles++;
-					} else {
-						// エラーが発生した
-						this.currentBatch.summary.failedFiles++;
 					}
-				} catch (error) {
-					console.error(`ファイル「${file.basename}」の分類中にエラーが発生:`, error);
-					this.currentBatch.summary.failedFiles++;
+				} catch (batchError) {
+					console.error('バッチ処理中にエラーが発生:', batchError);
+					new Notice(`バッチ処理エラー: ${batchError instanceof Error ? batchError.message : String(batchError)}`);
+				}
+			} else {
+				// 従来の個別API呼び出しによるバッチ処理を使用
+				try {
+					// バッチ分類を実行（進捗表示コールバックを渡す）
+					const results = await classifyFileBatch(
+						this.currentBatch.tasks, 
+						this.app.vault,
+						(current, total, message) => this.showProgress(current, total, message)
+					);
+					
+					// 各ファイルの結果を処理
+					for (const result of results) {
+						try {
+							if (result.success && result.targetFolder) {
+								// 分類先が見つかった場合は移動
+								await this.moveFileToFolder(result.file, result.targetFolder);
+								
+								// サマリーの更新
+								this.currentBatch.summary.classifiedFiles++;
+								
+								// フォルダごとのカウントを更新
+								if (!this.currentBatch.summary.folderCounts[result.targetFolder]) {
+									this.currentBatch.summary.folderCounts[result.targetFolder] = 0;
+								}
+								this.currentBatch.summary.folderCounts[result.targetFolder]++;
+							} else if (result.success) {
+								// 分類できなかった（スキップ）
+								this.currentBatch.summary.skippedFiles++;
+							} else {
+								// エラーが発生した
+								this.currentBatch.summary.failedFiles++;
+							}
+						} catch (error) {
+							console.error(`ファイル「${result.file.basename}」の処理中にエラーが発生:`, error);
+							this.currentBatch.summary.failedFiles++;
+						}
+					}
+				} catch (batchError) {
+					console.error('バッチ処理中にエラーが発生:', batchError);
+					new Notice(`バッチ処理エラー: ${batchError instanceof Error ? batchError.message : String(batchError)}`);
 				}
 			}
 
@@ -351,5 +409,12 @@ export default class SortInboxPlugin extends Plugin {
 		
 		// 詳細なログをコンソールに出力
 		console.log('分類処理結果:', summary);
+	}
+
+	// 進捗状況を表示
+	showProgress(current: number, total: number, message: string = '') {
+		const percent = Math.round((current / total) * 100);
+		const progressMessage = `処理中... ${current}/${total} (${percent}%)${message ? ` - ${message}` : ''}`;
+		new Notice(progressMessage, 3000);
 	}
 } 
