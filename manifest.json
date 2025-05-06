@@ -1,10 +1,12 @@
 {
-	"id": "sort-inbox",
-	"name": "Sort Inbox",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "Gemini 2.0 Flashを使用して任意のフォルダ内ファイルを自動分類するプラグイン",
-	"author": "Ryu Tanaka",
-	"authorUrl": "https://github.com/ryu8114",
-	"isDesktopOnly": false
-} 
+  "id": "sort-inbox",
+  "name": "Sort Inbox",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Gemini 2.0 Flashを使用して任意のフォルダ内ファイルを自動分類するプラグイン",
+  "author": "Ryu Tanaka",
+  "authorUrl": "https://github.com/ryu8114",
+  "isDesktopOnly": false,
+  "repo": "ryu8114/obsidian-sort-inbox",
+  "main": "main.js"
+}
