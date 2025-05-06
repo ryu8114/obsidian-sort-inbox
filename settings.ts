@@ -164,6 +164,15 @@ export class SortInboxSettingTab extends PluginSettingTab {
 					
 					// 有効/無効に応じてスライダー設定を表示切替
 					intervalSetting.settingEl.style.display = value ? 'flex' : 'none';
+					
+					// 有効/無効に応じてラベルテキストを更新
+					if (!value) {
+						intervalLabel.textContent = '手動実行のみ';
+					} else {
+						intervalLabel.textContent = this.plugin.settings.autoClassifyInterval === 0 
+							? '手動実行のみ' 
+							: `${this.plugin.settings.autoClassifyInterval}分ごとに実行`;
+					}
 				}));
 				
 		const intervalSetting = new Setting(containerEl)
@@ -192,9 +201,9 @@ export class SortInboxSettingTab extends PluginSettingTab {
 		// インターバルの値をラベルで表示
 		const intervalLabel = containerEl.createEl('div', {
 			cls: 'interval-label',
-			text: this.plugin.settings.autoClassifyInterval === 0 
-				? '手動実行のみ' 
-				: `${this.plugin.settings.autoClassifyInterval}分ごとに実行`
+			text: this.plugin.settings.autoClassifyEnabled ? 
+				(this.plugin.settings.autoClassifyInterval === 0 ? '手動実行のみ' : `${this.plugin.settings.autoClassifyInterval}分ごとに実行`) : 
+				'手動実行のみ'
 		});
 
 		this.addSeparator(containerEl);
