@@ -2,6 +2,9 @@
 
 Obsidianの「メモ/」フォルダ直下に作成された.mdファイルを、Gemini 2.0 Flashを使用して自動的に適切なフォルダに分類・移動するプラグインです。
 
+[English](#english) | [日本語](#japanese)
+
+<a id="japanese"></a>
 ## 機能
 
 - `メモ/` フォルダ直下に作成された `.md` ファイルを、自動で分類対象フォルダに移動
@@ -37,4 +40,46 @@ MIT
 
 ---
 
-**注意**: このプラグインはGemini API（Google）を使用します。APIの使用には無料枠の制限があります。 
+**注意**: このプラグインはGemini API（Google）を使用します。APIの使用には無料枠の制限があります。
+
+<a id="english"></a>
+# Sort Inbox - Obsidian Plugin
+
+This plugin automatically categorizes and moves Markdown files from your "Notes/" folder to appropriate subfolders using Gemini 2.0 Flash AI.
+
+## Features
+
+- Automatically moves `.md` files from your designated inbox folder to appropriate target folders
+- Classification is based on content analysis (title + body) using Gemini 2.0 Flash AI
+- Files that don't match any target folder remain in place (skipped)
+- Target folders can be customized through the plugin settings
+
+## Installation
+
+1. Open Obsidian Settings
+2. Go to Third-party plugins > Community plugins > Browse
+3. Search for "Sort Inbox" and install
+
+Alternatively, you can clone this repository into your `.obsidian/plugins/sort-inbox/` directory.
+
+## Configuration
+
+In the plugin settings, you can configure:
+
+- **Gemini API Key**: Get this from Google AI Studio
+- **Watch Folder**: The inbox folder to monitor (default: `Notes/`)
+- **Target Folders**: The list of folders to classify notes into
+
+## Usage
+
+1. Configure your Gemini API key and target folders in the settings
+2. Click the "Sort Inbox" icon in the left sidebar, or run "Sort inbox files" from the command palette
+3. Files in your inbox folder will be automatically classified and moved
+
+## License
+
+MIT
+
+---
+
+**Note**: This plugin uses the Gemini API (Google). API usage is subject to free tier limitations. 
