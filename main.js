@@ -144,11 +144,9 @@ async function testGeminiAPI(apiKey) {
 function parseGeminiResponse(response, targetFolders) {
   try {
     if (!response.candidates || response.candidates.length === 0) {
-      console.log("Gemini API\u5FDC\u7B54\u306B\u5019\u88DC\u304C\u3042\u308A\u307E\u305B\u3093");
       return null;
     }
     const text = response.candidates[0].content.parts[0].text.trim();
-    console.log("Gemini API\u304B\u3089\u306E\u5FDC\u7B54:", text);
     if (text === "\u5206\u985E\u3057\u306A\u3044" || text.includes("\u5206\u985E\u3057\u306A\u3044")) {
       return null;
     }
@@ -203,7 +201,6 @@ async function classifyFileBatch(tasks, vault, progressCallback) {
       const batchNumber = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(tasks.length / batchSize);
       const progressMessage = `\u30D0\u30C3\u30C1 ${batchNumber}/${totalBatches} \u51E6\u7406\u4E2D`;
-      console.log(`${progressMessage}: ${i + 1}\u301C${Math.min(i + batchSize, tasks.length)}/${tasks.length}\u30D5\u30A1\u30A4\u30EB...`);
       if (progressCallback) {
         progressCallback(i, tasks.length, progressMessage);
       }
@@ -212,7 +209,6 @@ async function classifyFileBatch(tasks, vault, progressCallback) {
       results.push(...batchResults);
       if (i + batchSize < tasks.length) {
         const waitMessage = "API\u30EC\u30FC\u30C8\u5236\u9650\u5BFE\u7B56\u306E\u305F\u3081\u5F85\u6A5F\u4E2D...";
-        console.log(waitMessage);
         if (progressCallback) {
           progressCallback(i + batchSize, tasks.length, waitMessage);
         }
@@ -283,7 +279,6 @@ ${file.content}
       return results;
     }
     const responseText = response.candidates[0].content.parts[0].text.trim();
-    console.log("\u30D0\u30C3\u30C1\u5206\u985E\u7D50\u679C:", responseText);
     const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
     if (!jsonMatch) {
       console.error("\u30D0\u30C3\u30C1\u5206\u985E: JSON\u5F62\u5F0F\u306E\u5FDC\u7B54\u3092\u62BD\u51FA\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
@@ -423,7 +418,7 @@ var SortInboxSettingTab = class extends import_obsidian.PluginSettingTab {
     const autoSetting = new import_obsidian.Setting(containerEl).setName("\u81EA\u52D5\u5206\u985E\u3092\u6709\u52B9\u306B\u3059\u308B").setDesc("ON\u306B\u3059\u308B\u3068\u8A2D\u5B9A\u3057\u305F\u9593\u9694\u3067\u81EA\u52D5\u7684\u306B\u30E1\u30E2\u3092\u5206\u985E\u3057\u307E\u3059").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoClassifyEnabled).onChange(async (value) => {
       this.plugin.settings.autoClassifyEnabled = value;
       await this.plugin.saveSettings();
-      intervalSetting.settingEl.style.display = value ? "flex" : "none";
+      intervalSetting.settingEl.classList.toggle("is-hidden", !value);
       if (!value) {
         intervalLabel.textContent = "\u624B\u52D5\u5B9F\u884C\u306E\u307F";
       } else {
@@ -436,7 +431,9 @@ var SortInboxSettingTab = class extends import_obsidian.PluginSettingTab {
       intervalLabel.textContent = value === 0 ? "\u624B\u52D5\u5B9F\u884C\u306E\u307F" : `${value}\u5206\u3054\u3068\u306B\u5B9F\u884C`;
     }));
     if (!this.plugin.settings.autoClassifyEnabled) {
-      intervalSetting.settingEl.style.display = "none";
+      intervalSetting.settingEl.classList.add("is-hidden");
+    } else {
+      intervalSetting.settingEl.classList.remove("is-hidden");
     }
     const intervalLabel = containerEl.createEl("div", {
       cls: "interval-label",
@@ -699,6 +696,10 @@ var SortInboxSettingTab = class extends import_obsidian.PluginSettingTab {
 				font-size: 0.85em;
 				color: var(--text-muted);
 			}
+			
+			.is-hidden {
+				display: none !important;
+			}
 		`;
     document.head.appendChild(styleEl);
   }
@@ -727,8 +728,6 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
     });
     this.addSettingTab(new SortInboxSettingTab(this.app, this));
     this.setupAutoClassify();
-    console.log("Sort Inbox \u30D7\u30E9\u30B0\u30A4\u30F3\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F");
-    console.log("\u73FE\u5728\u306E\u8A2D\u5B9A:", this.settings);
     this.registerEvent(this.app.vault.on("create", (file) => {
       this.handleFileCreated(file);
     }));
@@ -756,25 +755,19 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
       this.autoClassifyIntervalId = window.setInterval(() => {
         this.sortInbox();
       }, intervalMs);
-      console.log(`\u81EA\u52D5\u5206\u985E\u3092${this.settings.autoClassifyInterval}\u5206\u9593\u9694\u3067\u8A2D\u5B9A\u3057\u307E\u3057\u305F`);
     }
   }
   async handleFileCreated(file) {
     if (!(file instanceof import_obsidian2.TFile) || file.extension !== "md") {
-      console.log(`\u975E\u30DE\u30FC\u30AF\u30C0\u30A6\u30F3\u30D5\u30A1\u30A4\u30EB\u306E\u305F\u3081\u30B9\u30AD\u30C3\u30D7\u3057\u307E\u3059: ${file.path}`);
       return;
     }
     const inboxPath = this.getNormalizedInboxPath();
     const filePath = (0, import_obsidian2.normalizePath)(file.path);
-    console.log(`\u30D5\u30A1\u30A4\u30EB\u4F5C\u6210\u30A4\u30D9\u30F3\u30C8: \u30D1\u30B9=${filePath}, \u5BFE\u8C61\u30D5\u30A9\u30EB\u30C0=${inboxPath}`);
     const isInInboxFolder = this.isFileInInboxFolder(file);
     if (!isInInboxFolder) {
-      console.log(`\u5BFE\u8C61\u30D5\u30A9\u30EB\u30C0\u5916\u306E\u30D5\u30A1\u30A4\u30EB\u306E\u305F\u3081\u30B9\u30AD\u30C3\u30D7\u3057\u307E\u3059: ${filePath} (\u5BFE\u8C61\u30D5\u30A9\u30EB\u30C0: ${inboxPath})`);
       return;
     }
-    console.log(`\u65B0\u3057\u3044\u30D5\u30A1\u30A4\u30EB\u304C\u4F5C\u6210\u3055\u308C\u307E\u3057\u305F: ${filePath}`);
     if (this.settings.autoClassifyEnabled) {
-      console.log(`\u81EA\u52D5\u5206\u985E\u304C\u6709\u52B9\u306A\u306E\u30671\u79D2\u5F8C\u306B\u5206\u985E\u3092\u5B9F\u884C\u3057\u307E\u3059: ${file.basename}`);
       setTimeout(() => {
         this.classifySingleFile(file);
       }, 1e3);
@@ -791,7 +784,6 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
     const inboxPath = this.getNormalizedInboxPath();
     const filePath = (0, import_obsidian2.normalizePath)(file.path);
     if (inboxPath === "") {
-      console.log("\u8B66\u544A: \u76E3\u8996\u5BFE\u8C61\u30D5\u30A9\u30EB\u30C0\u304C\u8A2D\u5B9A\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u30EB\u30FC\u30C8\u76F4\u4E0B\u306E\u30D5\u30A1\u30A4\u30EB\u306E\u307F\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002");
       return !filePath.includes("/");
     }
     if (filePath.startsWith(inboxPath + "/")) {
@@ -805,25 +797,17 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
   async classifySingleFile(file) {
     try {
       new import_obsidian2.Notice(`\u30D5\u30A1\u30A4\u30EB\u300C${file.basename}\u300D\u3092\u5206\u985E\u4E2D...`);
-      console.log(`\u30D5\u30A1\u30A4\u30EB\u300C${file.basename}\u300D\u306E\u5206\u985E\u3092\u958B\u59CB\u3057\u307E\u3059`);
       const result = await classifyFile(file, this.settings, this.app.vault);
-      console.log(`\u5206\u985E\u7D50\u679C:`, result);
       if (result.success && result.targetFolder) {
         try {
           await this.moveFileToFolder(file, result.targetFolder);
           new import_obsidian2.Notice(`\u30D5\u30A1\u30A4\u30EB\u3092\u300C${result.targetFolder}\u300D\u306B\u5206\u985E\u3057\u307E\u3057\u305F`);
-          if (this.settings.classificationOptions.logResults) {
-            console.log(`\u30D5\u30A1\u30A4\u30EB\u300C${file.basename}\u300D\u3092\u300C${result.targetFolder}\u300D\u306B\u5206\u985E\u3057\u307E\u3057\u305F`);
-          }
         } catch (moveError) {
           console.error("\u30D5\u30A1\u30A4\u30EB\u79FB\u52D5\u4E2D\u306B\u30A8\u30E9\u30FC\u304C\u767A\u751F:", moveError);
           new import_obsidian2.Notice(`\u30D5\u30A1\u30A4\u30EB\u79FB\u52D5\u30A8\u30E9\u30FC: ${moveError instanceof Error ? moveError.message : String(moveError)}`);
         }
       } else if (result.success) {
         new import_obsidian2.Notice("\u5206\u985E\u5148\u304C\u898B\u3064\u304B\u3089\u306A\u304B\u3063\u305F\u305F\u3081\u3001\u30D5\u30A1\u30A4\u30EB\u306F\u79FB\u52D5\u3057\u307E\u305B\u3093\u3067\u3057\u305F");
-        if (this.settings.classificationOptions.logResults) {
-          console.log(`\u30D5\u30A1\u30A4\u30EB\u300C${file.basename}\u300D\u306F\u5206\u985E\u5BFE\u8C61\u30D5\u30A9\u30EB\u30C0\u304C\u898B\u3064\u304B\u3089\u306A\u304B\u3063\u305F\u305F\u3081\u30B9\u30AD\u30C3\u30D7\u3057\u307E\u3057\u305F`);
-        }
       } else {
         new import_obsidian2.Notice(`\u5206\u985E\u30A8\u30E9\u30FC: ${result.error || "\u4E0D\u660E\u306A\u30A8\u30E9\u30FC"}`);
       }
@@ -844,11 +828,8 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
         return;
       }
       new import_obsidian2.Notice(`\u300C${inboxPath}\u300D\u5185\u306E\u30D5\u30A1\u30A4\u30EB\u3092\u5206\u985E\u4E2D...`);
-      console.log(`\u300C${inboxPath}\u300D\u5185\u306E\u30D5\u30A1\u30A4\u30EB\u306E\u4E00\u62EC\u5206\u985E\u3092\u958B\u59CB\u3057\u307E\u3059`);
       const allFiles = this.app.vault.getMarkdownFiles();
       const files = allFiles.filter((file) => this.isFileInInboxFolder(file));
-      console.log(`\u691C\u51FA\u3055\u308C\u305F\u30D5\u30A1\u30A4\u30EB\u6570: ${files.length}`);
-      console.log(`\u691C\u51FA\u3055\u308C\u305F\u30D5\u30A1\u30A4\u30EB:`, files.map((f) => f.path));
       if (files.length === 0) {
         new import_obsidian2.Notice(`\u300C${inboxPath}\u300D\u5185\u306B\u5206\u985E\u5BFE\u8C61\u306E\u30D5\u30A1\u30A4\u30EB\u304C\u3042\u308A\u307E\u305B\u3093`);
         return;
@@ -936,12 +917,9 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
     const inboxPath = this.getNormalizedInboxPath();
     const fullTargetFolder = inboxPath ? `${inboxPath}/${targetFolder}` : targetFolder;
     const targetPath = (0, import_obsidian2.normalizePath)(`${fullTargetFolder}/${file.name}`);
-    console.log(`\u79FB\u52D5\u5148\u30D5\u30A9\u30EB\u30C0\u306E\u30D5\u30EB\u30D1\u30B9: ${fullTargetFolder}`);
-    console.log(`\u79FB\u52D5\u5148\u30D5\u30A1\u30A4\u30EB\u306E\u5B8C\u5168\u30D1\u30B9: ${targetPath}`);
     try {
       const folderExists = await this.app.vault.adapter.exists(fullTargetFolder);
       if (!folderExists) {
-        console.log(`\u30D5\u30A9\u30EB\u30C0\u300C${fullTargetFolder}\u300D\u304C\u5B58\u5728\u3057\u306A\u3044\u305F\u3081\u4F5C\u6210\u3057\u307E\u3059`);
         await this.app.vault.createFolder(fullTargetFolder);
       }
     } catch (error) {
@@ -949,7 +927,6 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
       throw new Error(`\u30D5\u30A9\u30EB\u30C0\u306E\u4F5C\u6210\u306B\u5931\u6557\u3057\u307E\u3057\u305F: ${error}`);
     }
     try {
-      console.log(`\u30D5\u30A1\u30A4\u30EB\u300C${file.path}\u300D\u3092\u300C${targetPath}\u300D\u306B\u79FB\u52D5\u3057\u307E\u3059`);
       await this.app.fileManager.renameFile(file, targetPath);
       return true;
     } catch (error) {
@@ -969,7 +946,6 @@ var SortInboxPlugin = class extends import_obsidian2.Plugin {
 \u30A8\u30E9\u30FC: ${summary.failedFiles}\u30D5\u30A1\u30A4\u30EB`;
     }
     new import_obsidian2.Notice(message);
-    console.log("\u5206\u985E\u51E6\u7406\u7D50\u679C:", summary);
   }
   showProgress(current, total, message = "") {
     const percent = Math.round(current / total * 100);
