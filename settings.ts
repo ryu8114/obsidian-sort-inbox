@@ -199,16 +199,14 @@ export class SortInboxSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.autoClassifyEnabled = value;
 					await this.plugin.saveSettings();
-					
-					// 有効/無効に応じてスライダー設定を表示切替
-					intervalSetting.settingEl.style.display = value ? 'flex' : 'none';
-					
-					// 有効/無効に応じてラベルテキストを更新
+					// クラスで表示/非表示を制御
+					intervalSetting.settingEl.classList.toggle('is-hidden', !value);
+					// ラベルテキスト更新
 					if (!value) {
 						intervalLabel.textContent = '手動実行のみ';
 					} else {
-						intervalLabel.textContent = this.plugin.settings.autoClassifyInterval === 0 
-							? '手動実行のみ' 
+						intervalLabel.textContent = this.plugin.settings.autoClassifyInterval === 0
+							? '手動実行のみ'
 							: `${this.plugin.settings.autoClassifyInterval}分ごとに実行`;
 					}
 				}));
@@ -233,7 +231,9 @@ export class SortInboxSettingTab extends PluginSettingTab {
 		
 		// インターバル設定の表示/非表示（自動分類が無効なら隠す）
 		if (!this.plugin.settings.autoClassifyEnabled) {
-			intervalSetting.settingEl.style.display = 'none';
+			intervalSetting.settingEl.classList.add('is-hidden');
+		} else {
+			intervalSetting.settingEl.classList.remove('is-hidden');
 		}
 		
 		// インターバルの値をラベルで表示
@@ -578,6 +578,10 @@ export class SortInboxSettingTab extends PluginSettingTab {
 				border-top: 1px solid var(--background-modifier-border);
 				font-size: 0.85em;
 				color: var(--text-muted);
+			}
+			
+			.is-hidden {
+				display: none !important;
 			}
 		`;
 		
