@@ -37,10 +37,6 @@ export default class SortInboxPlugin extends Plugin {
 		// 自動実行が有効な場合は、インターバルをセットアップ
 		this.setupAutoClassify();
 
-		// デバッグ情報をコンソールに表示
-		console.log('Sort Inbox プラグインを読み込みました');
-		console.log('現在の設定:', this.settings);
-
 		// ファイル作成イベントを監視
 		this.registerEvent(
 			this.app.vault.on('create', (file) => {
@@ -87,8 +83,6 @@ export default class SortInboxPlugin extends Plugin {
 			this.autoClassifyIntervalId = window.setInterval(() => {
 				this.sortInbox();
 			}, intervalMs);
-			
-			console.log(`自動分類を${this.settings.autoClassifyInterval}分間隔で設定しました`);
 		}
 	}
 
@@ -96,7 +90,6 @@ export default class SortInboxPlugin extends Plugin {
 	async handleFileCreated(file: any) {
 		// TFileでないか、マークダウンファイルでない場合はスキップ
 		if (!(file instanceof TFile) || file.extension !== 'md') {
-			console.log(`非マークダウンファイルのためスキップします: ${file.path}`);
 			return;
 		}
 
@@ -104,22 +97,16 @@ export default class SortInboxPlugin extends Plugin {
 		const inboxPath = this.getNormalizedInboxPath();
 		const filePath = normalizePath(file.path);
 		
-		console.log(`ファイル作成イベント: パス=${filePath}, 対象フォルダ=${inboxPath}`);
-		
 		// パスの比較を改善：フォルダ名の直接比較も行う
 		const isInInboxFolder = this.isFileInInboxFolder(file);
 		
 		if (!isInInboxFolder) {
-			console.log(`対象フォルダ外のファイルのためスキップします: ${filePath} (対象フォルダ: ${inboxPath})`);
 			return;
 		}
 
-		console.log(`新しいファイルが作成されました: ${filePath}`);
-		
 		// 自動分類が有効なら、分類を実行
 		if (this.settings.autoClassifyEnabled) {
 			// 少し待ってからファイルを処理（ファイルの内容が確実に書き込まれるように）
-			console.log(`自動分類が有効なので1秒後に分類を実行します: ${file.basename}`);
 			setTimeout(() => {
 				this.classifySingleFile(file);
 			}, 1000); // 1秒待機
@@ -146,7 +133,7 @@ export default class SortInboxPlugin extends Plugin {
 		// 空のパスの場合はルートディレクトリという意味なので、すべてのファイルが対象になってしまう
 		// そのため、空パスの場合は特別に処理する
 		if (inboxPath === '') {
-			console.log('警告: 監視対象フォルダが設定されていません。ルート直下のファイルのみ対象にします。');
+			// console.log('警告: 監視対象フォルダが設定されていません。ルート直下のファイルのみ対象にします。');
 			// ルート直下のファイルのみを対象とする（フォルダ内のファイルは対象外）
 			return !filePath.includes('/');
 		}
@@ -169,21 +156,14 @@ export default class SortInboxPlugin extends Plugin {
 	async classifySingleFile(file: TFile) {
 		try {
 			new Notice(`ファイル「${file.basename}」を分類中...`);
-			console.log(`ファイル「${file.basename}」の分類を開始します`);
 			
 			const result = await classifyFile(file, this.settings, this.app.vault);
-			console.log(`分類結果:`, result);
 			
 			if (result.success && result.targetFolder) {
 				// ファイルの移動処理
 				try {
 					await this.moveFileToFolder(file, result.targetFolder);
 					new Notice(`ファイルを「${result.targetFolder}」に分類しました`);
-					
-					// ログにも記録
-					if (this.settings.classificationOptions.logResults) {
-						console.log(`ファイル「${file.basename}」を「${result.targetFolder}」に分類しました`);
-					}
 				} catch (moveError) {
 					console.error('ファイル移動中にエラーが発生:', moveError);
 					new Notice(`ファイル移動エラー: ${moveError instanceof Error ? moveError.message : String(moveError)}`);
@@ -191,10 +171,6 @@ export default class SortInboxPlugin extends Plugin {
 			} else if (result.success) {
 				// 分類できなかった（targetFolderがnull）
 				new Notice('分類先が見つからなかったため、ファイルは移動しませんでした');
-				
-				if (this.settings.classificationOptions.logResults) {
-					console.log(`ファイル「${file.basename}」は分類対象フォルダが見つからなかったためスキップしました`);
-				}
 			} else {
 				// エラーが発生した
 				new Notice(`分類エラー: ${result.error || '不明なエラー'}`);
@@ -223,15 +199,11 @@ export default class SortInboxPlugin extends Plugin {
 			}
 			
 			new Notice(`「${inboxPath}」内のファイルを分類中...`);
-			console.log(`「${inboxPath}」内のファイルの一括分類を開始します`);
 
 			// 対象フォルダ内のファイルを取得（検出ロジックの改善）
 			const allFiles = this.app.vault.getMarkdownFiles();
 			const files = allFiles.filter(file => this.isFileInInboxFolder(file));
 			
-			console.log(`検出されたファイル数: ${files.length}`);
-			console.log(`検出されたファイル:`, files.map(f => f.path));
-
 			if (files.length === 0) {
 				new Notice(`「${inboxPath}」内に分類対象のファイルがありません`);
 				return;
@@ -365,14 +337,11 @@ export default class SortInboxPlugin extends Plugin {
 		// 対象フォルダ内のパスを構築
 		const targetPath = normalizePath(`${fullTargetFolder}/${file.name}`);
 		
-		console.log(`移動先フォルダのフルパス: ${fullTargetFolder}`);
-		console.log(`移動先ファイルの完全パス: ${targetPath}`);
-		
 		// フォルダの存在確認とフォルダ作成
 		try {
 			const folderExists = await this.app.vault.adapter.exists(fullTargetFolder);
 			if (!folderExists) {
-				console.log(`フォルダ「${fullTargetFolder}」が存在しないため作成します`);
+				// console.log(`フォルダ「${fullTargetFolder}」が存在しないため作成します`);
 				await this.app.vault.createFolder(fullTargetFolder);
 			}
 		} catch (error) {
@@ -382,7 +351,7 @@ export default class SortInboxPlugin extends Plugin {
 
 		// ファイルを移動
 		try {
-			console.log(`ファイル「${file.path}」を「${targetPath}」に移動します`);
+			// console.log(`ファイル「${file.path}」を「${targetPath}」に移動します`);
 			await this.app.fileManager.renameFile(file, targetPath);
 			return true;
 		} catch (error) {
@@ -406,9 +375,6 @@ export default class SortInboxPlugin extends Plugin {
 		}
 		
 		new Notice(message);
-		
-		// 詳細なログをコンソールに出力
-		console.log('分類処理結果:', summary);
 	}
 
 	// 進捗状況を表示

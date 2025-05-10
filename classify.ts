@@ -178,12 +178,12 @@ export async function testGeminiAPI(apiKey: string): Promise<boolean> {
 export function parseGeminiResponse(response: GeminiResponse, targetFolders: string[]): string | null {
     try {
         if (!response.candidates || response.candidates.length === 0) {
-            console.log('Gemini API応答に候補がありません');
+            // console.log('Gemini API応答に候補がありません');
             return null;
         }
 
         const text = response.candidates[0].content.parts[0].text.trim();
-        console.log('Gemini APIからの応答:', text);
+        // console.log('Gemini APIからの応答:', text);
         
         // 「分類しない」の場合はnullを返す
         if (text === '分類しない' || text.includes('分類しない')) {
@@ -266,7 +266,7 @@ export async function classifyFileBatch(
             
             // 進捗状況をコンソールとUI両方に表示
             const progressMessage = `バッチ ${batchNumber}/${totalBatches} 処理中`;
-            console.log(`${progressMessage}: ${i+1}〜${Math.min(i+batchSize, tasks.length)}/${tasks.length}ファイル...`);
+            // console.log(`${progressMessage}: ${i+1}〜${Math.min(i+batchSize, tasks.length)}/${tasks.length}ファイル...`);
             
             // 進捗コールバックが提供されている場合は呼び出し
             if (progressCallback) {
@@ -284,7 +284,7 @@ export async function classifyFileBatch(
             // APIレート制限対策のため少し待機（1分間に15リクエストの制限対応）
             if (i + batchSize < tasks.length) {
                 const waitMessage = 'APIレート制限対策のため待機中...';
-                console.log(waitMessage);
+                // console.log(waitMessage);
                 
                 if (progressCallback) {
                     progressCallback(i + batchSize, tasks.length, waitMessage);
@@ -391,7 +391,7 @@ ${file.content}
         
         // APIレスポンスを取得
         const responseText = response.candidates[0].content.parts[0].text.trim();
-        console.log('バッチ分類結果:', responseText);
+        // console.log('バッチ分類結果:', responseText);
         
         // JSONレスポンスを抽出（テキスト内からJSONを検索）
         // sフラグを使わずにドット(.)が改行にもマッチするようにする
